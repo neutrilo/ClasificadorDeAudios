@@ -22,6 +22,32 @@ El proyecto está diseñado teniendo en cuenta su **escalabilidad**. Por esta ra
 
 Aunque una implementación inicial mediante programación funcional podría resultar más sencilla, la utilización de POO busca facilitar la incorporación de nuevas funcionalidades y componentes a medida que el proyecto crezca.
 
+## Instalación
+
+Requiere Python 3.12 o superior. Desde la raíz del proyecto:
+
+```bash
+pip install .                    # dependencias base: numpy, scipy, soundfile
+pip install ".[microfono]"       # añade sounddevice (grabación desde el micrófono)
+pip install ".[graficas]"        # añade matplotlib (grafica_modelo.py)
+pip install ".[dev]"             # añade pytest
+```
+
+También se puede instalar directamente desde el repositorio:
+
+```bash
+pip install "git+https://github.com/neutrilo/ClasificadorDeAudios.git"
+```
+
+El paquete `src` puede importarse sin `sounddevice`: `grabador` y `predictor` se cargan solo cuando se usan.
+
+Para ejecutar las pruebas (no usan el micrófono ni modifican `data/` ni `modelo/`):
+
+```bash
+pip install ".[dev]"
+python -m pytest
+```
+
 ## Estructura del proyecto
 
 La estructura inicial del proyecto es:

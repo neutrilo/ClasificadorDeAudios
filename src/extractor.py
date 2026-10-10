@@ -1,6 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import soundfile as sf
 from scipy.signal import butter, filtfilt, correlate
 
 class Extractor:

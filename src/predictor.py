@@ -1,5 +1,4 @@
 import numpy as np
-import sounddevice as sd
 from .extractor import Extractor
 import json
 from types import SimpleNamespace
@@ -36,6 +35,8 @@ class predictor:
         self._ultimaFreqPC = None
 
     def escucha(self, duracion=3, fs=44100, canales=1):
+        import sounddevice as sd  # se importa aquí para que el paquete funcione sin PortAudio
+
         print("Grabando...")
         grabacion = sd.rec(int(duracion * fs), samplerate=fs, channels=canales)
         sd.wait()
