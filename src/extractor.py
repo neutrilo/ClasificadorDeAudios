@@ -32,11 +32,13 @@ class Extractor:
         devolver_vectores: si es True, también devuelve los arrays de lags
                             y correlación (útil para graficar)
         
-        Devuelve siempre:
+        Devuelve la frecuencia estimada (Hz), o None si la señal no tiene
+        energía o no hay un pico positivo en el rango.
+        Si devolver_vectores=True devuelve en cambio:
             lag_pico, frecuencia_estimada
-        Si devolver_vectores=True, además devuelve:
             lags (array de lags evaluados, en muestras)
             segmento (valores de correlación para cada lag)
+        (o cuatro None cuando no hay estimación)
         """
         lag_min = int(fs / frec_max)
         lag_max = int(fs / frec_min)
@@ -48,10 +50,12 @@ class Extractor:
 
         segmento = corr[lag_min:lag_max]
 
-        if len(segmento) == 0:
+        # Sin segmento que evaluar, sin energía o sin pico positivo no hay
+        # frecuencia que estimar (argmax de ceros daría un falso lag 0).
+        if len(segmento) == 0 or corr[0] <= 0 or np.max(segmento) <= 0:
             if devolver_vectores:
                 return None, None, None, None
-            return None, None
+            return None
 
         lag_pico = np.argmax(segmento) + lag_min
         frecuencia_estimada = fs / lag_pico
@@ -74,11 +78,18 @@ class Extractor:
         umbral: altura normalizada que debe superar el espectro concentrado
                 para marcar el inicio de la colina (por defecto 0.3)
         
-        Devuelve: frecuencia media (Hz) dentro del tramo [f_inicio, f_inicio + ancho_hz]
+        Devuelve: frecuencia media (Hz) dentro del tramo [f_inicio, f_inicio + ancho_hz],
+        o None si la señal no tiene energía.
         """
         frecuencias = np.fft.rfftfreq(len(sennal), d=1/fs)
         espectro = np.abs(np.fft.rfft(sennal))
-        espectro = espectro / np.max(espectro)
+        maximo = np.max(espectro) if len(espectro) > 0 else 0.0
+
+        # Señal vacía o sin energía: no hay colina que medir.
+        if not np.isfinite(maximo) or maximo <= 0:
+            return None
+
+        espectro = espectro / maximo
         espectro_concentrado = espectro ** concentracion
 
         # Encontrar el primer punto que supera el umbral
@@ -102,6 +113,7 @@ class Extractor:
         return frecuencia_media
 
     def extrae(self,sennal, fs):
+        """Devuelve (freqAutoC, freqPCol); cada valor es None si no se pudo medir."""
         sennal = self.pasabanda(sennal,self.fmin,self.fmax,fs,orden =4)
         freqAutoC = self.autocorrelacion_pitch(sennal,fs,self.fmin,self.fmax,False)
         freqPCol = self.frecuencia_media_primera_colina(sennal, fs, ancho_hz=70, concentracion=3, umbral=0.4)

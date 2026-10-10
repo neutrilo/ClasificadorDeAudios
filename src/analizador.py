@@ -8,32 +8,53 @@ class Analizador:
 
     @classmethod
     def analizaCarpeta(cls, carpeta, extractor):
-        import os
+        """Analiza todos los .wav (sin distinguir mayúsculas) de una carpeta.
+
+        Los archivos cuya frecuencia no se pudo medir (None) se excluyen de las
+        estadísticas y se cuentan aparte.
+
+        Devuelve [fmedAC, desvAC, fmedPC, desvPC, n_usados, n_descartados].
+        Lanza ValueError si no hay ningún archivo utilizable.
+        """
         from .lector import Lector
-        archivos = [f for f in os.listdir(carpeta) if f.endswith('.wav')]
-        freqAutoC = np.zeros(len(archivos))
-        freqPCol = np.zeros(len(archivos))
-        i = 0
-        for archivo in archivos:            
-            
-            ruta = carpeta + archivo
+        archivos = sorted(f for f in os.listdir(carpeta) if f.lower().endswith('.wav'))
+        if not archivos:
+            raise ValueError(f"No hay archivos .wav en la carpeta: {carpeta}")
+
+        freqAutoC = []
+        freqPCol = []
+        descartados = 0
+        for archivo in archivos:
+            ruta = os.path.join(carpeta, archivo)
             sennal, sr = Lector.lee(ruta)
-            freqAutoC[i], freqPCol[i] = extractor.extrae(sennal, sr)
-            i+=1
-            
-        fmedAC = freqAutoC.mean()
-        desvAC = freqAutoC.std()
-        fmedPC = freqPCol.mean()
-        desvPC = freqPCol.std()
-        return [fmedAC,desvAC,fmedPC,desvPC,i]
+            freqAC, freqPC = extractor.extrae(sennal, sr)
+            if freqAC is None or freqPC is None:
+                descartados += 1
+                continue
+            freqAutoC.append(freqAC)
+            freqPCol.append(freqPC)
+
+        if descartados:
+            print(f"Se descartaron {descartados} archivo(s) sin frecuencia medible en {carpeta}")
+
+        if not freqAutoC:
+            raise ValueError(
+                f"Ningún archivo utilizable en la carpeta (todos sin frecuencia medible): {carpeta}"
+            )
+
+        freqAutoC = np.array(freqAutoC)
+        freqPCol = np.array(freqPCol)
+        return [freqAutoC.mean(), freqAutoC.std(),
+                freqPCol.mean(), freqPCol.std(),
+                len(freqAutoC), descartados]
 
     @classmethod
     def analizaYGuarda(cls, carpetaFeme, carpetaMasc, extractor, nombreArchivo="modelo.json"):
         datosFeme = cls.analizaCarpeta(carpetaFeme, extractor)
         datosMasc = cls.analizaCarpeta(carpetaMasc, extractor)
 
-        fmedACFeme, desvACFeme, fmedPCFeme, desvPCFeme, nFeme = datosFeme
-        fmedACMasc, desvACMasc, fmedPCMasc, desvPCMasc, nMasc = datosMasc
+        fmedACFeme, desvACFeme, fmedPCFeme, desvPCFeme, nFeme, _ = datosFeme
+        fmedACMasc, desvACMasc, fmedPCMasc, desvPCMasc, nMasc, _ = datosMasc
 
         modelo = {
             "fmedACFeme": float(fmedACFeme),

@@ -22,7 +22,8 @@ class Lector:
             sennal, sr = sf.read(ruta)
             sennal = cls.stereoAMono(sennal)
             return sennal, sr
-        else:
-            print("Formato no valido")
+        raise ValueError(
+            f"Formato no válido: {ruta!r}. Formatos soportados: {', '.join(cls.formatos_soportados)}"
+        )
 
         

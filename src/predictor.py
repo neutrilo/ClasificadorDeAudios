@@ -52,23 +52,28 @@ class predictor:
         # (no afecta la comparación entre Feme y Masc)
         return np.exp(-0.5 * ((x - media) / desv) ** 2) / desv
 
-    def decide(self, modo="AC"):
-        freqAC, freqPC = self.escucha()
-
+    def _parametros(self, modo):
+        """Devuelve (medFeme, desvFeme, medMasc, desvMasc) del modo indicado."""
         if modo == "AC":
-            x = freqAC
-            medFeme, desvFeme = self.fmedACFeme, self.desvACFeme
-            medMasc, desvMasc = self.fmedACMasc, self.desvACMasc
-        elif modo == "PC":
-            x = freqPC
-            medFeme, desvFeme = self.fmedPCFeme, self.desvPCFeme
-            medMasc, desvMasc = self.fmedPCMasc, self.desvPCMasc
-        else:
-            raise ValueError("modo debe ser 'AC' o 'PC'")
+            return self.fmedACFeme, self.desvACFeme, self.fmedACMasc, self.desvACMasc
+        if modo == "PC":
+            return self.fmedPCFeme, self.desvPCFeme, self.fmedPCMasc, self.desvPCMasc
+        raise ValueError("modo debe ser 'AC' o 'PC'")
 
-        if x < 50:
+    def decideFrecuencia(self, x, modo="AC"):
+        """Decide el género a partir de una frecuencia ya medida (sin micrófono).
+
+        x: frecuencia en Hz, o None si no se pudo medir.
+        Devuelve (x, genero).
+        """
+        medFeme, desvFeme, medMasc, desvMasc = self._parametros(modo)
+
+        if x is None or not np.isfinite(x) or x < 50:
             genero = "demasiado ruido"
-            print(f"Frecuencia detectada ({modo}): {x:.2f} Hz -> {genero}")
+            if x is None:
+                print(f"Frecuencia detectada ({modo}): ninguna -> {genero}")
+            else:
+                print(f"Frecuencia detectada ({modo}): {x:.2f} Hz -> {genero}")
             return x, genero
 
         vFeme = self._verosimilitud(x, medFeme, desvFeme)
@@ -92,6 +97,12 @@ class predictor:
         print(f"Frecuencia detectada ({modo}): {x:.2f} Hz -> {genero}")
         return x, genero
 
+    def decide(self, modo="AC"):
+        self._parametros(modo)  # valida el modo antes de grabar
+        freqAC, freqPC = self.escucha()
+        x = freqAC if modo == "AC" else freqPC
+        return self.decideFrecuencia(x, modo)
+
     @staticmethod
     def _actualizaMediaDesv(media_vieja, desv_vieja, n_viejo, x):
         # Algoritmo de Welford para actualizar media/desvío con una muestra nueva
@@ -105,6 +116,18 @@ class predictor:
         return media_nueva, desv_nueva
 
     def actualizaDatos(self, genero, xAC, xPC):
+        """Incorpora una muestra al modelo y guarda el JSON.
+
+        Devuelve True si se actualizó; False si alguna frecuencia es None
+        (o no es finita), en cuyo caso el modelo no se modifica.
+        """
+        if genero not in ("Femenino", "Masculino"):
+            raise ValueError("genero debe ser 'Femenino' o 'Masculino'")
+
+        if not all(x is not None and np.isfinite(x) for x in (xAC, xPC)):
+            print("Muestra descartada: no se pudo medir alguna de las frecuencias.")
+            return False
+
         if genero == "Femenino":
             self.fmedACFeme, self.desvACFeme = self._actualizaMediaDesv(
                 self.fmedACFeme, self.desvACFeme, self.nFemeAC, xAC)
@@ -123,10 +146,8 @@ class predictor:
                 self.fmedPCMasc, self.desvPCMasc, self.nMascPC, xPC)
             self.nMascPC += 1
 
-        else:
-            raise ValueError("genero debe ser 'Femenino' o 'Masculino'")
-
         self._guardaJson()
+        return True
 
     def _guardaJson(self):
         modelo = {
@@ -151,9 +172,13 @@ class predictor:
         x, genero = self.decide(modo)
 
         if genero in ("Masculino", "Femenino"):
+            if self._ultimaFreqAC is None or self._ultimaFreqPC is None:
+                print("No se puede agregar la muestra: falta alguna de las frecuencias.")
+                return x, genero
+
             respuesta = input(f"¿Agregar esta muestra a la base de datos como {genero}? (s/n): ")
             if respuesta.strip().lower() == "s":
-                self.actualizaDatos(genero, self._ultimaFreqAC, self._ultimaFreqPC)
-                print("Muestra agregada y JSON actualizado.")
+                if self.actualizaDatos(genero, self._ultimaFreqAC, self._ultimaFreqPC):
+                    print("Muestra agregada y JSON actualizado.")
 
         return x, genero
